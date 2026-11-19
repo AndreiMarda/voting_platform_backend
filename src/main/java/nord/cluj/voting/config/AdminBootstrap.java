@@ -3,6 +3,7 @@ package nord.cluj.voting.config;
 import nord.cluj.voting.entity.Role;
 import nord.cluj.voting.entity.User;
 import nord.cluj.voting.repository.UserRepository;
+import nord.cluj.voting.service.Usernames;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -45,20 +46,21 @@ public class AdminBootstrap implements ApplicationRunner {
         if (username.isBlank() || password.isBlank() || users.existsByRole(Role.ADMIN)) {
             return false;
         }
-        if (!username.matches("\\p{L}{3,30}") || password.length() < 8 || password.length() > 72) {
-            log.warn("ADMIN_USERNAME / ADMIN_PASSWORD ignored: username must be 3-30 letters, password 8-72 characters");
+        String name = Usernames.normalize(username);
+        if (!Usernames.isValid(name) || password.length() < 8 || password.length() > 72) {
+            log.warn("ADMIN_USERNAME / ADMIN_PASSWORD ignored: {}; password must be 8-72 characters", Usernames.RULE);
             return false;
         }
-        if (users.findByUsernameIgnoreCase(username).isPresent()) {
-            log.warn("ADMIN_USERNAME '{}' is already taken by a non-admin account; no admin was created", username);
+        if (users.findByUsernameIgnoreCase(name).isPresent()) {
+            log.warn("ADMIN_USERNAME '{}' is already taken by a non-admin account; no admin was created", name);
             return false;
         }
         User admin = new User();
-        admin.setUsername(username);
+        admin.setUsername(name);
         admin.setPasswordHash(encoder.encode(password));
         admin.setRole(Role.ADMIN); // mustChangePassword stays true
         users.saveAndFlush(admin);
-        log.info("Created first admin '{}'. Remove ADMIN_PASSWORD from .env now; it must be changed at first login.", username);
+        log.info("Created first admin '{}'. Remove ADMIN_PASSWORD from .env now; it must be changed at first login.", name);
         return true;
     }
 }

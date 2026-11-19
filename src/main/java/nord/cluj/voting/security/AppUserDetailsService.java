@@ -1,6 +1,7 @@
 package nord.cluj.voting.security;
 
 import nord.cluj.voting.repository.UserRepository;
+import nord.cluj.voting.service.Usernames;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -17,7 +18,8 @@ public class AppUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        return users.findByUsernameIgnoreCase(username)
+        // same normalisation as at creation: trimmed, single spaces; case is ignored by the lookup
+        return users.findByUsernameIgnoreCase(Usernames.normalize(username))
                 .map(AuthUser::new)
                 .orElseThrow(() -> new UsernameNotFoundException("Unknown user"));
     }

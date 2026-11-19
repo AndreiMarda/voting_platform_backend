@@ -9,6 +9,12 @@ server:
 voting:
   # Password a user gets when an admin resets it. They are forced to change it at next login.
   default-password: ${DEFAULT_PASSWORD}   # required; set it in .env (see .env.example)
+  # Brute-force protection on the login: this many wrong passwords within the window blocks that username
+  # (or, with the larger limit, that IP address) until the oldest failure leaves the window.
+  login:
+    max-failures-per-user: 5
+    max-failures-per-ip: 30
+    window: PT15M
   # First admin, created at startup only if no admin exists yet. Set both in .env.
   bootstrap-admin:
     username: ${ADMIN_USERNAME:}

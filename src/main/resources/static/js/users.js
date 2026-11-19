@@ -41,16 +41,7 @@ async function remove(u) {
   me = await initPage();
   if (me.role !== 'ADMIN') { location.href = '/'; return; }
 
-  const form = document.getElementById('create');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const data = Object.fromEntries(new FormData(form));
-    try {
-      const created = await api.post('/api/users', data);
-      toast('User "' + created.username + '" was created.');
-      form.reset();
-      await load();
-    } catch (err) { toast(err.message, 'error'); }
-  });
+  document.getElementById('new-user').addEventListener('click', openCreateUserDialog);
+  document.addEventListener('users-changed', () => load().catch(() => {}));   // after the pop-up creates a user
   await load();
 })();

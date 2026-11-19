@@ -21,6 +21,7 @@
     <h1>Voting platform</h1>
     <div id="error" class="msg error">Invalid username or password.</div>
     <div id="logout" class="msg info">You have been signed out.</div>
+    <div id="locked" class="msg error"></div>
     <label>Username
       <input type="text" name="username" autocomplete="username" required autofocus>
     </label>
@@ -33,6 +34,13 @@
     const q = new URLSearchParams(location.search);
     if (q.has('error')) document.getElementById('error').style.display = 'block';
     if (q.has('logout')) document.getElementById('logout').style.display = 'block';
+    if (q.has('locked')) {
+      const minutes = Math.max(1, parseInt(q.get('locked'), 10) || 1);
+      const box = document.getElementById('locked');
+      box.textContent = 'Too many failed attempts. Please try again in about ' + minutes
+        + (minutes === 1 ? ' minute.' : ' minutes.');
+      box.style.display = 'block';
+    }
   </script>
 </body>
 </html>

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Audit log</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <main>
+    <h1>Audit log</h1>
+    <p class="meta">Who did what, and when. Entries cannot be edited or deleted here. Casting a vote is deliberately never recorded.</p>
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Details</th><th>IP</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="row" style="margin-top:.75rem">
+        <button id="more" type="button" class="secondary" hidden>Load older entries</button>
+        <span id="status" class="meta"></span>
+      </div>
+    </div>
+  </main>
+  <script src="/js/app.js"></script>
+  <script src="/js/audit.js"></script>
+</body>
+</html>

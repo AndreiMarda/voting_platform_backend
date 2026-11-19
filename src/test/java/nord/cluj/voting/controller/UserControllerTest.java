@@ -1,5 +1,7 @@
 package nord.cluj.voting.controller;
 
+import nord.cluj.voting.TestSupport;
+import nord.cluj.voting.service.SessionService;
 import nord.cluj.voting.entity.Role;
 import nord.cluj.voting.entity.User;
 import nord.cluj.voting.repository.UserRepository;
@@ -15,7 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -35,17 +37,20 @@ class UserControllerTest {
     @Autowired UserRepository users;
     @Autowired PasswordEncoder encoder;
     @Autowired PollService polls;
+    @Autowired SessionService sessions;
 
     User admin;
     MockHttpSession adminSession;
 
-    /** Random letters-only username (hex digits shifted to letters). */
-    private static String name() {
-        StringBuilder sb = new StringBuilder("t");
-        for (char c : UUID.randomUUID().toString().replace("-", "").substring(0, 10).toCharArray()) {
-            sb.append(Character.isDigit(c) ? (char) ('k' + (c - '0')) : c);
-        }
+    private static String word() {
+        StringBuilder sb = new StringBuilder().append((char) ('A' + ThreadLocalRandom.current().nextInt(26)));
+        for (int i = 0; i < 7; i++) sb.append((char) ('a' + ThreadLocalRandom.current().nextInt(26)));
         return sb.toString();
+    }
+
+    /** A valid, already-normalised username: first name + last name, letters only. */
+    private static String name() {
+        return word() + " " + word();
     }
 
     private User save(String username, Role role) {
@@ -112,17 +117,89 @@ class UserControllerTest {
     @Test
     void invalidInputIsRejected() throws Exception {
         mvc.perform(post("/api/users").session(adminSession).contentType("application/json")
-                .content(body("ab", "temp-pass-1", "USER"))).andExpect(status().isBadRequest());      // short name
+                .content(body("Ana", "temp-pass-1", "USER"))).andExpect(status().isBadRequest());      // one word only
         mvc.perform(post("/api/users").session(adminSession).contentType("application/json")
-                .content(body("bad name", "temp-pass-1", "USER"))).andExpect(status().isBadRequest()); // space
+                .content(body("Ana Maria Ioana Popescu", "temp-pass-1", "USER"))).andExpect(status().isBadRequest()); // four words
         mvc.perform(post("/api/users").session(adminSession).contentType("application/json")
-                .content(body("maria2", "temp-pass-1", "USER"))).andExpect(status().isBadRequest());   // digit
+                .content(body("Maria2 Popescu", "temp-pass-1", "USER"))).andExpect(status().isBadRequest());   // digit
         mvc.perform(post("/api/users").session(adminSession).contentType("application/json")
-                .content(body("maria_x", "temp-pass-1", "USER"))).andExpect(status().isBadRequest());  // symbol
+                .content(body("Maria_x Popescu", "temp-pass-1", "USER"))).andExpect(status().isBadRequest());  // symbol
         mvc.perform(post("/api/users").session(adminSession).contentType("application/json")
                 .content(body(name(), "short", "USER"))).andExpect(status().isBadRequest());           // short password
         mvc.perform(post("/api/users").session(adminSession).contentType("application/json")
                 .content(body(name(), "temp-pass-1", "SUPERUSER"))).andExpect(status().isBadRequest()); // bad role
+    }
+
+    @Test
+    void usernameIsTrimmedCollapsedAndCapitalised() throws Exception {
+        mvc.perform(post("/api/users").session(adminSession).contentType("application/json")
+                        .content(body("  ion   mihai POPESCU ", "temp-pass-1", "USER")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.username").value("Ion Mihai Popescu"));
+
+        // login normalises the same way, so any spelling of the name works
+        mvc.perform(post("/login").param("username", "  ION mihai   popescu ").param("password", "temp-pass-1"))
+                .andExpect(redirectedUrl("/"));
+    }
+
+    @Test
+    void twoOrThreeWordsAreRequired() throws Exception {
+        mvc.perform(post("/api/users").session(adminSession).contentType("application/json")
+                        .content(body("Ana Maria Popescu", "temp-pass-1", "USER")))
+                .andExpect(status().isCreated());                       // 2 first names + last name
+        mvc.perform(post("/api/users").session(adminSession).contentType("application/json")
+                        .content(body("Ana", "temp-pass-1", "USER")))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("first names")));
+    }
+
+    @Test
+    void onlineListShowsOnlyEnabledUsersSeenRecently() throws Exception {
+        User recent = save(name(), Role.USER);
+        User stale = save(name(), Role.USER);
+        User never = save(name(), Role.USER);
+        User disabled = save(name(), Role.USER);
+        recent.setLastSeenAt(Instant.now().minusSeconds(20));
+        stale.setLastSeenAt(Instant.now().minusSeconds(60 * 10));
+        disabled.setLastSeenAt(Instant.now());
+        disabled.setEnabled(false);
+        users.saveAllAndFlush(java.util.List.of(recent, stale, disabled));
+
+        var hasItem = org.hamcrest.Matchers.hasItem(recent.getUsername());
+        mvc.perform(get("/api/users/online").session(adminSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].username", hasItem))
+                .andExpect(jsonPath("$[*].username",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem(stale.getUsername()))))
+                .andExpect(jsonPath("$[*].username",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem(never.getUsername()))))
+                .andExpect(jsonPath("$[*].username",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem(disabled.getUsername()))));
+    }
+
+    @Test
+    void userDisappearsFromOnlineListWhenTheyLogOut() throws Exception {
+        User alice = save(name(), Role.USER);
+        MockHttpSession aliceSession = login(alice.getUsername(), "password-123");
+        mvc.perform(post("/api/heartbeat").session(aliceSession)).andExpect(status().isNoContent());
+        users.flush();
+
+        mvc.perform(get("/api/users/online").session(adminSession))
+                .andExpect(jsonPath("$[*].username", org.hamcrest.Matchers.hasItem(alice.getUsername())));
+
+        mvc.perform(post("/logout").session(aliceSession));
+        users.flush();
+
+        mvc.perform(get("/api/users/online").session(adminSession))
+                .andExpect(jsonPath("$[*].username",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem(alice.getUsername()))));
+    }
+
+    @Test
+    void onlineListIsAdminOnly() throws Exception {
+        User plain = save(name(), Role.USER);
+        mvc.perform(get("/api/users/online").session(login(plain.getUsername(), "password-123")))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -165,7 +242,7 @@ class UserControllerTest {
         User voter = save(name(), Role.USER);
         voter.setLastSeenAt(Instant.now());
         users.saveAndFlush(voter);
-        polls.create(admin.getId(), "Budget", null); // snapshot includes the online voter
+        TestSupport.poll(sessions, polls, admin.getId(), "Budget"); // snapshot includes the online voter
 
         mvc.perform(delete("/api/users/" + voter.getId()).session(adminSession))
                 .andExpect(status().isConflict());

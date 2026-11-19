@@ -29,4 +29,8 @@ public interface PollParticipationRepository extends JpaRepository<PollParticipa
 
     @Query("select p.id.userId from PollParticipation p where p.id.pollId = :pollId")
     List<Long> findUserIdsByPollId(@Param("pollId") Long pollId);
+
+    @Modifying
+    @Query("delete from PollParticipation p where p.id.pollId = :pollId")
+    void deleteByPollId(@Param("pollId") Long pollId);
 }

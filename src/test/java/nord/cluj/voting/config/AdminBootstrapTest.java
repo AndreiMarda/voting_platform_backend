@@ -30,8 +30,10 @@ class AdminBootstrapTest {
 
     @Test
     void rejectsInvalidCredentials() {
-        assertThat(with("admin1", "long-enough-pass").bootstrap()).isFalse(); // digit in name
-        assertThat(with("Maria", "short").bootstrap()).isFalse();             // short password
+        assertThat(with("Admin1 Test", "long-enough-pass").bootstrap()).isFalse(); // digit in name
+        assertThat(with("Maria Popescu", "short").bootstrap()).isFalse();             // short password
+        assertThat(with("Maria", "long-enough-pass").bootstrap()).isFalse();          // one word only
+        assertThat(with("A B C D", "long-enough-pass").bootstrap()).isFalse();        // four words
     }
 
     @Test
@@ -43,17 +45,17 @@ class AdminBootstrapTest {
             a.setRole(Role.ADMIN);
             users.saveAndFlush(a);
         }
-        assertThat(with("Newadmin", "long-enough-pass").bootstrap()).isFalse();
-        assertThat(users.findByUsernameIgnoreCase("Newadmin")).isEmpty();
+        assertThat(with("New Admin", "long-enough-pass").bootstrap()).isFalse();
+        assertThat(users.findByUsernameIgnoreCase("New Admin")).isEmpty();
     }
 
     @Test
     void createsFirstAdminWithHashedPasswordAndForcedChange() {
         assumeFalse(users.existsByRole(Role.ADMIN), "database already has an admin");
 
-        assertThat(with("Firstadmin", "long-enough-pass").bootstrap()).isTrue();
+        assertThat(with("  first   admin ", "long-enough-pass").bootstrap()).isTrue();
 
-        User admin = users.findByUsernameIgnoreCase("firstadmin").orElseThrow();
+        User admin = users.findByUsernameIgnoreCase("First Admin").orElseThrow();
         assertThat(admin.getRole()).isEqualTo(Role.ADMIN);
         assertThat(admin.isMustChangePassword()).isTrue();
         assertThat(encoder.matches("long-enough-pass", admin.getPasswordHash())).isTrue();

@@ -1,5 +1,5 @@
 /*
- * Shared frontend code: API client, toast, tiny DOM helper, page header, heartbeat.
+ * Shared frontend code: API client, toast, tiny DOM helper, form pop-ups, page header, heartbeat.
  * Every request to the backend goes through `api` so a future frontend can port this one file.
  * User-provided text is only ever inserted with textContent / append(string), never innerHTML (XSS).
  */
@@ -67,12 +67,115 @@ function toast(message, type = 'success') {
 
 const CHOICE_LABELS = { FOR: 'For', AGAINST: 'Against', ABSTAIN: 'Abstain' };
 
+/**
+ * Live updates (Server-Sent Events). The server sends a tiny "changed" event, with only a topic ("polls",
+ * "session") and never any data; the page then re-fetches what it shows. The browser reconnects by itself
+ * if the connection drops.
+ */
+function onServerChange(handler) {
+  if (!window.EventSource) return null;           // very old browser: the page's slow timer still refreshes it
+  const source = new EventSource('/api/events');
+  source.addEventListener('changed', (e) => handler(e.data));
+  return source;
+}
+
+/* ---------- Form pop-ups ---------- */
+
+/**
+ * A modal form. `fields` are <label> elements; `onSubmit(data)` receives the form values and may throw
+ * (the message is shown inside the pop-up - a modal sits above the toast area). Closes on success.
+ * Returns { open() }.
+ */
+function formDialog({ title, intro, fields, submitLabel, onSubmit }) {
+  const error = el('div', { class: 'form-error', role: 'alert', hidden: true });
+  const submit = el('button', { type: 'submit' }, submitLabel);
+  const form = el('form', {},
+    el('h2', {}, title),
+    intro ? el('p', { class: 'meta' }, intro) : null,
+    error,
+    fields,
+    el('div', { class: 'row' }, submit,
+      el('button', { type: 'button', class: 'secondary', onclick: () => dialog.close() }, 'Cancel')));
+  const dialog = el('dialog', { class: 'modal' }, form);
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    error.hidden = true;
+    submit.disabled = true;
+    try {
+      await onSubmit(Object.fromEntries(new FormData(form)));
+      dialog.close();
+    } catch (err) {
+      error.textContent = err.message;
+      error.hidden = false;
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  document.body.append(dialog);
+
+  return {
+    open() {
+      form.reset();
+      error.hidden = true;
+      dialog.showModal();
+    },
+  };
+}
+
+let createUserDialog;
+
+/** Opens the create-user pop-up. Fires a `users-changed` event on document after a user is created. */
+function openCreateUserDialog() {
+  if (!createUserDialog) {
+    createUserDialog = formDialog({
+      title: 'Create a user',
+      intro: 'The username is the person\'s name: one or two first names and a last name. '
+        + 'The user must change this temporary password at first login.',
+      submitLabel: 'Create user',
+      fields: [
+        el('label', {}, 'Full name (this is the username)',
+          el('input', { name: 'username', maxlength: 100, required: true, autocomplete: 'off',
+            placeholder: 'e.g. Ion Mihai Popescu',
+            pattern: '\\s*\\p{L}+(\\s+\\p{L}+){1,2}\\s*', title: 'One or two first names and a last name, letters only' })),
+        el('label', {}, 'Temporary password (8–72 characters)',
+          el('input', { name: 'password', type: 'text', minlength: 8, maxlength: 72, required: true, autocomplete: 'off' })),
+        el('label', {}, 'Role',
+          el('select', { name: 'role' }, el('option', { value: 'USER' }, 'User'), el('option', { value: 'ADMIN' }, 'Admin'))),
+      ],
+      onSubmit: async (data) => {
+        const created = await api.post('/api/users', data);
+        toast('User "' + created.username + '" was created.');
+        document.dispatchEvent(new CustomEvent('users-changed'));
+      },
+    });
+  }
+  createUserDialog.open();
+}
+
+/* ---------- Top bar ---------- */
+
+/** Admin dropdown for the top bar. */
+function adminMenu() {
+  const menu = el('details', { class: 'menu' },
+    el('summary', {}, 'Admin ▾'),
+    el('div', { class: 'menu-items' },
+      el('button', { type: 'button', onclick: () => { menu.open = false; openCreateUserDialog(); } }, 'Create user…'),
+      el('a', { href: '/online.html' }, 'Online users'),
+      el('a', { href: '/users.html' }, 'Manage users'),
+      el('a', { href: '/audit.html' }, 'Audit log')));
+  // close when clicking anywhere else
+  document.addEventListener('click', (e) => { if (!menu.contains(e.target)) menu.open = false; });
+  return menu;
+}
+
 /** Renders the top bar and starts the heartbeat. Returns the signed-in user. */
 async function initPage() {
   const me = await api.get('/api/auth/me');
   const nav = el('nav', {},
-    el('a', { href: '/' }, 'Votes'),
-    me.role === 'ADMIN' ? el('a', { href: '/users.html' }, 'Users') : null);
+    el('a', { href: '/' }, 'Current session'),
+    el('a', { href: '/sessions.html' }, 'Past sessions'),
+    me.role === 'ADMIN' ? adminMenu() : null);
   const logout = el('form', { method: 'post', action: '/logout' },
     el('button', { type: 'submit', class: 'secondary' }, 'Sign out'));
   document.body.prepend(el('header', { class: 'topbar' },
@@ -83,7 +186,8 @@ async function initPage() {
 
   // Tells the server this user is online (poll eligibility is a snapshot of online users).
   const beat = () => fetch('/api/heartbeat', { method: 'POST', credentials: 'same-origin' }).catch(() => {});
-  beat();
+  await beat();   // the first heartbeat finishes before the page loads, so someone who just came online is already
+                  // added to the open votes (late joiners) when the page asks for them
   setInterval(beat, 30000);
   return me;
 }

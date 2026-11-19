@@ -1,0 +1,15 @@
+# Production settings. Activate with the environment variable SPRING_PROFILES_ACTIVE=prod
+# (or --spring.profiles.active=prod). Use this ONLY when the app is served over HTTPS.
+server:
+  # The app runs behind a reverse proxy that terminates HTTPS (Caddy, nginx, a cloud load balancer, ...).
+  # This makes Spring trust the proxy's X-Forwarded-For / X-Forwarded-Proto headers, so it knows the real
+  # client IP (login throttling, audit log) and that the original request was secure (HSTS header).
+  # IMPORTANT: only valid if the app is reachable exclusively through that proxy, otherwise clients could fake
+  # these headers.
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      cookie:
+        secure: true        # the browser only sends the login cookie over HTTPS
+        http-only: true
+        same-site: strict
