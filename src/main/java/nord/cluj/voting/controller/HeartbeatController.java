@@ -2,6 +2,7 @@ package nord.cluj.voting.controller;
 
 import nord.cluj.voting.repository.UserRepository;
 import nord.cluj.voting.security.AuthUser;
+import nord.cluj.voting.service.PollService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,9 +19,11 @@ import java.time.Instant;
 public class HeartbeatController {
 
     private final UserRepository users;
+    private final PollService polls;
 
-    public HeartbeatController(UserRepository users) {
+    public HeartbeatController(UserRepository users, PollService polls) {
         this.users = users;
+        this.polls = polls;
     }
 
     @PostMapping
@@ -28,5 +31,6 @@ public class HeartbeatController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void beat(@AuthenticationPrincipal AuthUser user) {
         users.touch(user.getId(), Instant.now());
+        polls.enrollInOpenPolls(user.getId());   // someone who just came online can vote in the votes already open
     }
 }

@@ -2,6 +2,7 @@ package nord.cluj.voting.controller;
 
 import jakarta.validation.Valid;
 import nord.cluj.voting.dto.UserDtos.CreateUserRequest;
+import nord.cluj.voting.dto.UserDtos.OnlineUserView;
 import nord.cluj.voting.dto.UserDtos.UserView;
 import nord.cluj.voting.security.AuthUser;
 import nord.cluj.voting.service.UserService;
@@ -45,6 +46,12 @@ public class UserController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void resetPassword(@PathVariable Long id) {
         service.resetPassword(id);
+    }
+
+    /** Who is logged in right now (active within the online window). */
+    @GetMapping("/online")
+    public List<OnlineUserView> online() {
+        return service.listOnline();
     }
 
     @DeleteMapping("/{id}")

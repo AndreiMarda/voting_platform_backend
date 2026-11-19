@@ -28,6 +28,10 @@ public class Poll {
     @Column(columnDefinition = "text")
     private String description;
 
+    /** The voting session this poll belongs to; fixed at creation. */
+    @Column(name = "session_id", nullable = false, updatable = false)
+    private Long sessionId;
+
     @Column(name = "is_anonymous", nullable = false)
     private boolean anonymous = false;
 
@@ -52,6 +56,9 @@ public class Poll {
     }
 
     public Long getId() { return id; }
+
+    public Long getSessionId() { return sessionId; }
+    public void setSessionId(Long sessionId) { this.sessionId = sessionId; }
 
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }

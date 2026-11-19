@@ -2,7 +2,6 @@ package nord.cluj.voting.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import nord.cluj.voting.entity.Role;
 import nord.cluj.voting.entity.User;
@@ -14,12 +13,12 @@ public final class UserDtos {
     private UserDtos() {
     }
 
-    /** Password max is 72: BCrypt ignores anything beyond 72 bytes. */
+    /**
+     * The username is validated by {@code Usernames} after normalisation (trim, single spaces, capitals),
+     * so it is only length-limited here. Password max is 72: BCrypt ignores anything beyond 72 bytes.
+     */
     public record CreateUserRequest(
-            @NotBlank
-            @Size(min = 3, max = 30)
-            @Pattern(regexp = "\\p{L}+", message = "may only contain letters")
-            String username,
+            @NotBlank @Size(max = 100) String username,
             @NotBlank @Size(min = 8, max = 72) String password,
             @NotNull Role role) {
     }
@@ -34,6 +33,13 @@ public final class UserDtos {
         public static UserView of(User u) {
             return new UserView(u.getId(), u.getUsername(), u.getRole(), u.isEnabled(),
                     u.isMustChangePassword(), u.getCreatedAt());
+        }
+    }
+
+    /** A user who is currently logged in (sent a heartbeat recently). */
+    public record OnlineUserView(Long id, String username, Role role, Instant lastSeenAt) {
+        public static OnlineUserView of(User u) {
+            return new OnlineUserView(u.getId(), u.getUsername(), u.getRole(), u.getLastSeenAt());
         }
     }
 }

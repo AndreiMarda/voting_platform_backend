@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -22,4 +23,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Modifying
     @Query("update User u set u.lastSeenAt = :now where u.id = :id")
     void touch(@Param("id") Long id, @Param("now") Instant now);
+
+    /** Called on logout, so the user stops showing as online immediately. */
+    @Modifying
+    @Transactional
+    @Query("update User u set u.lastSeenAt = null where u.id = :id")
+    void clearLastSeen(@Param("id") Long id);
 }
