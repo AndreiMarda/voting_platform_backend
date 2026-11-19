@@ -35,6 +35,17 @@ dependencies {
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+// By default the tests use the same database as the app. To run them against a separate database instead,
+// set TEST_DB_NAME (in .env or as an environment variable), e.g. TEST_DB_NAME=nord_cluj_voting_platform_test
+def testDbName = System.getenv('TEST_DB_NAME') ?: file('.env').with { envFile ->
+	envFile.exists()
+		? envFile.readLines().collect { it.trim() }.find { it.startsWith('TEST_DB_NAME=') }?.substring('TEST_DB_NAME='.length())?.trim()
+		: null
+}
+
 tasks.named('test') {
 	useJUnitPlatform()
+	if (testDbName) {
+		environment 'DB_NAME', testDbName
+	}
 }

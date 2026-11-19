@@ -1,0 +1,34 @@
+# PostgreSQL for local development and tests.
+#
+#   docker compose up -d     start it; the data survives restarts (stored in the "pgdata" volume)
+#   docker compose down      stop it            (docker compose down -v  ALSO DELETES all the data)
+#   docker compose logs -f   watch it
+#
+# It reads DB_USERNAME and DB_PASSWORD from the same .env file the application uses.
+# On its first start it creates TWO databases: the app's own, and a separate one for the tests
+# (see docker/init-test-db.sql and the README).
+services:
+  db:
+    image: postgres:16
+    container_name: voting-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nord_cluj_voting_platform
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in the .env file}
+    ports:
+      # Published on port 5433, not 5432, so it does not clash with a PostgreSQL that is already installed on
+      # this machine. When you use this container, put DB_PORT=5433 in .env.
+      - "${DOCKER_DB_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # scripts in this folder run once, the first time the (empty) data volume is created
+      - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/10-init-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
