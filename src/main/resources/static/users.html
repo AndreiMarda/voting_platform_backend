@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Users</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <main>
+    <h1>Users</h1>
+    <form id="create" class="card">
+      <h2>Create a user</h2>
+      <p>The user must change this password at first login. Usernames are letters only.</p>
+      <label>Username <input name="username" minlength="3" maxlength="30" pattern="\p{L}+" title="Letters only" required autocomplete="off"></label>
+      <label>Temporary password (8–72 characters) <input name="password" type="text" minlength="8" maxlength="72" required autocomplete="off"></label>
+      <label>Role
+        <select name="role"><option value="USER">User</option><option value="ADMIN">Admin</option></select>
+      </label>
+      <button type="submit">Create user</button>
+    </form>
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Created</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </main>
+  <script src="/js/app.js"></script>
+  <script src="/js/users.js"></script>
+</body>
+</html>
