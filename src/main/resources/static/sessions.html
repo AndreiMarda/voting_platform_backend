@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Past sessions</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <main>
+    <h1>Sessions</h1>
+    <p class="meta">Every session and its votes are kept, so you can look back at earlier results.</p>
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Name</th><th>Status</th><th>Started by</th><th>Started</th><th>Ended</th><th>Votes</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </main>
+  <script src="/js/app.js"></script>
+  <script src="/js/sessions.js"></script>
+</body>
+</html>
