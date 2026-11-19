@@ -81,6 +81,12 @@ class LoginTest {
     }
 
     @Test
+    void usernameIsTrimmedBeforeLookup() throws Exception {
+        mvc.perform(post("/login").param("username", "   " + username + "  ").param("password", "s3cret-pass"))
+                .andExpect(redirectedUrl("/"));
+    }
+
+    @Test
     void wrongPasswordIsRejected() throws Exception {
         mvc.perform(post("/login").param("username", username).param("password", "nope"))
                 .andExpect(redirectedUrl("/login.html?error"));
