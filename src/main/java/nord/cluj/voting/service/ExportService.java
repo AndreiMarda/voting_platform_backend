@@ -26,7 +26,7 @@ import java.util.Locale;
 public class ExportService {
 
     private static final DateTimeFormatter WHEN =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
+            DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.systemDefault());
 
     public record CsvFile(String filename, byte[] content) {
     }

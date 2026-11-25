@@ -1,10 +1,12 @@
 package nord.cluj.voting.controller;
 
 import jakarta.validation.Valid;
+import nord.cluj.voting.dto.SessionDtos.RenameSessionRequest;
 import nord.cluj.voting.dto.SessionDtos.SessionView;
 import nord.cluj.voting.dto.SessionDtos.StartSessionRequest;
 import nord.cluj.voting.security.AuthUser;
 import nord.cluj.voting.service.ExportService;
+import nord.cluj.voting.service.PdfReportService;
 import nord.cluj.voting.service.SessionService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -12,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -28,8 +31,10 @@ public class SessionController {
 
     private final SessionService service;
     private final ExportService exports;
+    private final PdfReportService pdfReports;
 
-    public SessionController(SessionService service, ExportService exports) {
+    public SessionController(SessionService service, ExportService exports, PdfReportService pdfReports) {
+        this.pdfReports = pdfReports;
         this.service = service;
         this.exports = exports;
     }
@@ -66,6 +71,25 @@ public class SessionController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.filename() + "\"")
                 .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
                 .body(file.content());
+    }
+
+    /**
+     * Everyone: the session's report as a PDF. Lists every vote held in the session, including deleted ones;
+     * works while the session is running and after it ended.
+     */
+    @GetMapping("/{id}/report.pdf")
+    public ResponseEntity<byte[]> reportPdf(@AuthenticationPrincipal AuthUser user, @PathVariable Long id) {
+        PdfReportService.PdfFile file = pdfReports.sessionPdf(id, user.getId());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.filename() + "\"")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(file.content());
+    }
+
+    /** Admin only (see SecurityConfig). Works on the running session and on ended ones. */
+    @PatchMapping("/{id}")
+    public SessionView rename(@PathVariable Long id, @Valid @RequestBody RenameSessionRequest body) {
+        return service.rename(id, body.name());
     }
 
     /** Admin only (see SecurityConfig). Closes the session's open votes. */

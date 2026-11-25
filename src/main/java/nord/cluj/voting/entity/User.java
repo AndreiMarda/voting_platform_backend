@@ -22,6 +22,13 @@ public class User {
     @Column(nullable = false, length = 60)
     private String username;
 
+    /** Null for accounts that could not be split from their username; {@link #getDisplayName()} then falls back. */
+    @Column(name = "first_name", length = 60)
+    private String firstName;
+
+    @Column(name = "last_name", length = 60)
+    private String lastName;
+
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
@@ -35,6 +42,20 @@ public class User {
     @Column(name = "must_change_password", nullable = false)
     private boolean mustChangePassword = true;
 
+    @Column(length = 254)
+    private String email;
+
+    /** Two capital letters + digits, at most 7 characters. Unique. Without it the user cannot vote. */
+    @Column(name = "id_oncr", length = 7)
+    private String idOncr;
+
+    /** New account created without an email: the user must add it at next login. */
+    @Column(name = "must_add_email", nullable = false)
+    private boolean mustAddEmail = false;
+
+    @Column(name = "last_login_at")
+    private Instant lastLoginAt;
+
     @Column(name = "last_seen_at")
     private Instant lastSeenAt;
 
@@ -45,6 +66,20 @@ public class User {
 
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
+
+    public String getFirstName() { return firstName; }
+    public void setFirstName(String firstName) { this.firstName = firstName; }
+
+    public String getLastName() { return lastName; }
+    public void setLastName(String lastName) { this.lastName = lastName; }
+
+    /** How the person is shown in the app: "First Last". The username is only for signing in. */
+    public String getDisplayName() {
+        String first = firstName == null ? "" : firstName.trim();
+        String last = lastName == null ? "" : lastName.trim();
+        String full = (first + " " + last).trim();
+        return full.isEmpty() ? username : full;
+    }
 
     public String getPasswordHash() { return passwordHash; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
@@ -57,6 +92,17 @@ public class User {
 
     public boolean isMustChangePassword() { return mustChangePassword; }
     public void setMustChangePassword(boolean mustChangePassword) { this.mustChangePassword = mustChangePassword; }
+
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+
+    public String getIdOncr() { return idOncr; }
+    public void setIdOncr(String idOncr) { this.idOncr = idOncr; }
+
+    public boolean isMustAddEmail() { return mustAddEmail; }
+    public void setMustAddEmail(boolean mustAddEmail) { this.mustAddEmail = mustAddEmail; }
+
+    public Instant getLastLoginAt() { return lastLoginAt; }
 
     public Instant getLastSeenAt() { return lastSeenAt; }
     public void setLastSeenAt(Instant lastSeenAt) { this.lastSeenAt = lastSeenAt; }

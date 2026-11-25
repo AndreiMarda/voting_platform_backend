@@ -10,6 +10,7 @@ import nord.cluj.voting.security.LoginSuccessHandler;
 import nord.cluj.voting.security.LoginThrottleFilter;
 import nord.cluj.voting.service.AuditService;
 import nord.cluj.voting.service.LoginAttemptService;
+import nord.cluj.voting.service.PresenceService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -27,26 +28,32 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, UserRepository users,
-                                            LoginAttemptService loginAttempts, AuditService audit) throws Exception {
+                                            LoginAttemptService loginAttempts, AuditService audit,
+                                            PresenceService presence) throws Exception {
         http
-                .addFilterAfter(new AccountStatusFilter(users), AnonymousAuthenticationFilter.class)
+                .addFilterAfter(new AccountStatusFilter(users, presence), AnonymousAuthenticationFilter.class)
                 // brute-force protection: refuse a blocked username/IP before the password is checked
                 .addFilterBefore(new LoginThrottleFilter(loginAttempts), UsernamePasswordAuthenticationFilter.class)
                 // Session cookie is HttpOnly + SameSite=Strict (see application.yaml), which is what
                 // protects the state-changing requests instead of CSRF tokens.
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/login.html", "/error", "/actuator/health").permitAll()
+                        .requestMatchers("/login.html", "/register.html", "/error", "/actuator/health").permitAll()
+                        // self-registration: whether it is open, and signing up, are public (only while an admin has it open)
+                        .requestMatchers(HttpMethod.GET, "/api/registration").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/register").permitAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/registration").hasRole("ADMIN")
                         .requestMatchers("/api/users", "/api/users/**").hasRole("ADMIN")
                         .requestMatchers("/api/audit", "/api/audit/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/sessions", "/api/sessions/*/end").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/sessions/*").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/polls/*").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/polls", "/api/polls/*/close").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .formLogin(form -> form
                         .loginPage("/login.html")          // the portal
                         .loginProcessingUrl("/login")      // the form posts username + password here
-                        .successHandler(new LoginSuccessHandler(loginAttempts, audit))   // -> "/"
+                        .successHandler(new LoginSuccessHandler(loginAttempts, audit, users, presence))   // -> "/"
                         .failureHandler(new LoginFailureHandler(loginAttempts, audit))   // -> "/login.html?error" or "?locked=N"
                         .permitAll())
                 .logout(logout -> logout
