@@ -12,9 +12,17 @@
       <h1>Users</h1>
       <button id="new-user" type="button">Create user…</button>
     </div>
+    <div class="card row between" id="registration-box">
+      <div>
+        <strong>Registration:</strong> <span id="registration-state">…</span>
+        <div class="meta">While it is open, a "Create account" button appears on the login page and anyone can sign up as a regular user.</div>
+      </div>
+      <button id="registration-toggle" type="button" class="secondary" hidden></button>
+    </div>
+    <p class="meta" id="counts"></p>
     <div class="card" style="overflow-x:auto">
       <table>
-        <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Created</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Username</th><th>ID ONCR</th><th>Email</th><th>Role</th><th>Status</th><th>Last login</th><th>Created</th><th></th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>

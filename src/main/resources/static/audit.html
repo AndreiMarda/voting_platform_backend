@@ -10,6 +10,17 @@
   <main>
     <h1>Audit log</h1>
     <p class="meta">Who did what, and when. Entries cannot be edited or deleted here. Casting a vote is deliberately never recorded.</p>
+    <form id="filters" class="card filters">
+      <label>From <input type="date" id="from"></label>
+      <label>To <input type="date" id="to"></label>
+      <label>User <input type="search" id="user" placeholder="username or name" autocomplete="off"></label>
+      <label>Action <select id="action"><option value="">All actions</option></select></label>
+      <div class="row">
+        <button type="submit">Search</button>
+        <button type="button" id="clear" class="secondary">Clear</button>
+        <button type="button" id="pdf" class="secondary">Export PDF</button>
+      </div>
+    </form>
     <div class="card" style="overflow-x:auto">
       <table>
         <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Details</th><th>IP</th></tr></thead>

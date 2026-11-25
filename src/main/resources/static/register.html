@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create account</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f3f4f6; display: grid; place-items: center; min-height: 100vh; margin: 0; padding: 1rem 0; }
+    form { background: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.1); width: 100%; max-width: 360px; box-sizing: border-box; }
+    h1 { margin: 0 0 .5rem; font-size: 1.4rem; }
+    p { margin: 0 0 1.25rem; font-size: .9rem; color: #475569; }
+    label { display: block; margin-bottom: 1rem; font-size: .9rem; }
+    input { display: block; width: 100%; margin-top: .25rem; padding: .55rem; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; font-size: 1rem; }
+    button { width: 100%; padding: .65rem; border: 0; border-radius: 4px; background: #2563eb; color: #fff; font-size: 1rem; cursor: pointer; }
+    button:disabled { opacity: .6; }
+    .msg { padding: .6rem; border-radius: 4px; margin-bottom: 1rem; font-size: .9rem; display: none; background: #fee2e2; color: #991b1b; }
+    .hint { font-size: .8rem; color: #64748b; margin: .2rem 0 0; }
+    .req { color: #dc2626; font-weight: 700; }
+    .legend { font-size: .8rem; color: #64748b; margin: 0 0 1rem; }
+    .back { display: block; text-align: center; margin-top: 1rem; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <form id="f">
+    <h1>Create account</h1>
+    <p id="intro">Fill in your details to create your account.</p>
+    <div id="msg" class="msg"></div>
+    <div id="fields">
+      <label>First name <span class="req">*</span>
+        <input id="firstName" maxlength="60" required autocomplete="given-name" autofocus>
+      </label>
+      <label>Last name <span class="req">*</span>
+        <input id="lastName" maxlength="60" required autocomplete="family-name">
+      </label>
+      <label>Username (used to sign in) <span class="req">*</span>
+        <input id="username" maxlength="100" required autocomplete="username" placeholder="e.g. Ion Popescu"
+               pattern="\s*\p{L}+(\s+\p{L}+){1,2}\s*" title="Two or three words, letters only">
+      </label>
+      <label>Email address <span class="req">*</span>
+        <input id="email" type="email" maxlength="254" required autocomplete="email">
+      </label>
+      <label>Password (8–72 characters) <span class="req">*</span>
+        <input id="password" type="password" minlength="8" maxlength="72" required autocomplete="new-password">
+      </label>
+      <label>Repeat password <span class="req">*</span>
+        <input id="again" type="password" required autocomplete="new-password">
+      </label>
+      <label>ID ONCR (optional: two capital letters and digits, at most 7 characters, e.g. AB12345)
+        <input id="idOncr" maxlength="7" autocomplete="off" pattern="[A-Za-z]{2}[0-9]{1,5}"
+               title="Two letters followed by 1 to 5 digits, e.g. AB12345" style="text-transform: uppercase">
+        <div class="hint">Without an ID ONCR you can sign in, but you cannot vote. You can add it later in your profile.</div>
+      </label>
+      <p class="legend"><span class="req">*</span> mandatory field</p>
+      <button type="submit" id="submit">Create account</button>
+    </div>
+    <a class="back" href="/login.html">← Back to sign in</a>
+  </form>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const show = (t) => { $('msg').textContent = t; $('msg').style.display = 'block'; };
+
+    // Only open while an admin has registration switched on.
+    fetch('/api/registration').then((r) => r.json()).then((s) => {
+      if (!s.open) {
+        $('fields').style.display = 'none';
+        $('intro').textContent = 'Registration is closed right now. Please ask an administrator.';
+      }
+    }).catch(() => show('Cannot reach the server.'));
+
+    $('f').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      $('msg').style.display = 'none';
+      if ($('password').value !== $('again').value) return show('The passwords do not match.');
+      $('submit').disabled = true;
+      try {
+        const r = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: $('username').value, firstName: $('firstName').value, lastName: $('lastName').value,
+            email: $('email').value, password: $('password').value, idOncr: $('idOncr').value,
+          }),
+        });
+        if (r.status === 201) { location.href = '/login.html?registered'; return; }
+        const body = await r.json().catch(() => ({}));
+        const errors = Array.isArray(body.errors) ? body.errors.map((x) => x.defaultMessage).filter(Boolean).join('; ') : '';
+        show(body.detail || errors || 'Could not create the account.');
+      } catch { show('Cannot reach the server.'); }
+      $('submit').disabled = false;
+    });
+  </script>
+</body>
+</html>
