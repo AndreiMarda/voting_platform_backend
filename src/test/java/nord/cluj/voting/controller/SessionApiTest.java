@@ -26,6 +26,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -51,6 +52,7 @@ class SessionApiTest {
         u.setUsername("u" + UUID.randomUUID().toString().replace("-", "").substring(0, 8));
         u.setPasswordHash(encoder.encode("password-123"));
         u.setRole(role);
+        u.setIdOncr(TestSupport.idOncr());
         u.setMustChangePassword(false);
         u.setLastSeenAt(Instant.now());
         return users.saveAndFlush(u);
@@ -202,6 +204,47 @@ class SessionApiTest {
         mvc.perform(get("/api/sessions").session(aliceSession))
                 .andExpect(jsonPath("$[0].name").value("Next"))               // newest first
                 .andExpect(jsonPath("$[*].name", hasItem("Assembly")));        // history is kept
+    }
+
+    @Test
+    void anAdminCanRenameARunningAndAnEndedSession() throws Exception {
+        var running = sessions.start("Old name", admin.getId());
+
+        mvc.perform(patch("/api/sessions/" + running.id()).session(adminSession).contentType("application/json")
+                        .content(json("  New   name ")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("New name"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+        mvc.perform(get("/api/sessions/current").session(aliceSession))
+                .andExpect(jsonPath("$.name").value("New name"));
+
+        sessions.end(running.id());
+        mvc.perform(patch("/api/sessions/" + running.id()).session(adminSession).contentType("application/json")
+                        .content(json("Final name")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Final name"))
+                .andExpect(jsonPath("$.status").value("ENDED"));
+    }
+
+    @Test
+    void renamingNeedsAnAdminAndAValidName() throws Exception {
+        var s = sessions.start("Keep me", admin.getId());
+
+        mvc.perform(patch("/api/sessions/" + s.id()).session(aliceSession).contentType("application/json")
+                        .content(json("Hacked")))
+                .andExpect(status().isForbidden());
+        mvc.perform(patch("/api/sessions/" + s.id()).contentType("application/json").content(json("Hacked")))
+                .andExpect(status().isUnauthorized());
+        for (String bad : new String[]{null, "", "   ", "x".repeat(101)}) {
+            mvc.perform(patch("/api/sessions/" + s.id()).session(adminSession).contentType("application/json")
+                            .content(json(bad)))
+                    .andExpect(status().isBadRequest());
+        }
+        mvc.perform(patch("/api/sessions/999999999").session(adminSession).contentType("application/json")
+                        .content(json("Whatever")))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/sessions/" + s.id()).session(aliceSession))
+                .andExpect(jsonPath("$.name").value("Keep me"));
     }
 
     @Test

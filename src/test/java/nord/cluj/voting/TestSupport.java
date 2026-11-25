@@ -6,6 +6,7 @@ import nord.cluj.voting.service.PollService;
 import nord.cluj.voting.service.SessionService;
 
 import java.util.Optional;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Polls need a running session. Tests run inside a transaction that is rolled back, so if the dev database
@@ -17,6 +18,11 @@ public final class TestSupport {
     public static final String TEST_SESSION = "Test session";
 
     private TestSupport() {
+    }
+
+    /** A valid, practically unique ID ONCR ("TS" + 5 digits). Users without one cannot vote. */
+    public static String idOncr() {
+        return "TS" + (10000 + ThreadLocalRandom.current().nextInt(90000));
     }
 
     /** Makes sure the running session is ours (ending any real one for the duration of the test). */

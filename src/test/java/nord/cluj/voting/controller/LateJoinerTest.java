@@ -49,6 +49,7 @@ class LateJoinerTest {
         u.setUsername("Late" + UUID.randomUUID().toString().replace("-", "").substring(0, 8));
         u.setPasswordHash(encoder.encode("password-123"));
         u.setRole(role);
+        u.setIdOncr(TestSupport.idOncr());
         u.setMustChangePassword(false);
         if (online) u.setLastSeenAt(Instant.now());
         return users.saveAndFlush(u);

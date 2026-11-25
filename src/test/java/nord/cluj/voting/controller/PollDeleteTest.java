@@ -54,6 +54,7 @@ class PollDeleteTest {
         u.setUsername("u" + UUID.randomUUID().toString().replace("-", "").substring(0, 8));
         u.setPasswordHash(encoder.encode("password-123"));
         u.setRole(role);
+        u.setIdOncr(TestSupport.idOncr());
         u.setMustChangePassword(false);
         u.setLastSeenAt(Instant.now());
         return users.saveAndFlush(u);

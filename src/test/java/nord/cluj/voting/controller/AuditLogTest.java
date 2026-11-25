@@ -52,6 +52,7 @@ class AuditLogTest {
         u.setUsername("Aud" + UUID.randomUUID().toString().replace("-", "").substring(0, 8));
         u.setPasswordHash(encoder.encode("password-123"));
         u.setRole(role);
+        u.setIdOncr(TestSupport.idOncr());
         u.setMustChangePassword(false);
         u.setLastSeenAt(Instant.now());
         return users.saveAndFlush(u);
@@ -74,7 +75,7 @@ class AuditLogTest {
     @Test
     void creatingAndDeletingUsersIsRecordedWithWhoDidIt() throws Exception {
         String created = mvc.perform(post("/api/users").session(adminSession).contentType("application/json")
-                        .content("{\"username\":\"Ion Popescu\",\"password\":\"temp-pass-1\",\"role\":\"USER\"}"))
+                        .content("{\"username\":\"Ion Popescu\",\"firstName\":\"Ion\",\"lastName\":\"Popescu\",\"password\":\"temp-pass-1\",\"role\":\"USER\"}"))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         String id = created.replaceAll(".*\"id\":(\\d+).*", "$1");
 
