@@ -13,7 +13,7 @@ async function load() {
   document.getElementById('summary').textContent =
     online.length + (online.length === 1 ? ' user is' : ' users are') + ' online right now. This list refreshes by itself.';
   const rows = online.length
-    ? online.map((u) => el('tr', {}, el('td', {}, u.username), el('td', {}, u.role), el('td', {}, ago(u.lastSeenAt))))
+    ? online.map((u) => el('tr', {}, el('td', {}, u.displayName), el('td', {}, u.role), el('td', {}, ago(u.lastSeenAt))))
     : [el('tr', {}, el('td', { colspan: 3, class: 'meta' }, 'Nobody is online.'))];
   document.getElementById('rows').replaceChildren(...rows);
 }

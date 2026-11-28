@@ -7,6 +7,8 @@ server:
         same-site: strict
 
 voting:
+  # The most people who can be online at the same time (admins are always let in). Set MAX_ONLINE in .env to change it.
+  max-online: ${MAX_ONLINE:60}
   # Password a user gets when an admin resets it. They are forced to change it at next login.
   default-password: ${DEFAULT_PASSWORD}   # required; set it in .env (see .env.example)
   # Brute-force protection on the login: this many wrong passwords within the window blocks that username

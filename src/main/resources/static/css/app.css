@@ -105,3 +105,66 @@ th, td { text-align: left; padding: .5rem; border-bottom: 1px solid var(--line);
 .toast.error { background: var(--danger); }
 
 @media (max-width: 560px) { .names { grid-template-columns: 1fr; } }
+
+/* audit log search form and its printable report */
+.filters { display: flex; flex-direction: row; flex-wrap: wrap; gap: .75rem 1rem; align-items: flex-end; margin-bottom: 1rem; }
+.filters label { margin: 0; font-size: .85rem; flex: 1 1 11rem; }
+.filters .row { flex: 0 0 auto; flex-wrap: nowrap; }
+.report table.audit-table { font-size: .8rem; }
+.report table.audit-table th, .report table.audit-table td { padding: .25rem .4rem; vertical-align: top; }
+@media print { .report table.audit-table tr { break-inside: avoid; } .report table.audit-table thead { display: table-header-group; } }
+.poll-time { display: block; margin-top: .75rem; }
+
+/* phones: the top bar wraps instead of overflowing, tap targets are comfortable */
+@media (max-width: 720px) {
+  .topbar { flex-wrap: wrap; gap: .4rem .9rem; }
+  .topbar nav { order: 3; flex: 1 0 100%; gap: 1rem; overflow-x: auto; white-space: nowrap; }
+  .topbar .spacer { display: none; }
+  .topbar .who { margin-left: auto; max-width: 45vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  main { padding: 1rem .75rem 4rem; }
+  .filters label { flex: 1 1 100%; }
+}
+@media (pointer: coarse) {
+  button, select, input:not([type='checkbox']):not([type='radio']) { min-height: 44px; }
+  input, select, textarea { font-size: 16px; }
+}
+
+/* the running session: one big card that holds its header and all of its votes */
+.session-card { background: #eef2f7; border: 1px solid var(--line); border-top: 4px solid var(--primary); border-radius: 10px; padding: 1rem 1.25rem 1.25rem; }
+.session-card #head > .card { background: none; border: 0; padding: 0 0 .25rem; margin: 0; }
+.session-card #head h2 { font-size: 1.5rem; margin: 0; }
+.session-card h1 { font-size: 1.1rem; margin: 1rem 0 .5rem; }
+@media (max-width: 720px) { .session-card { padding: .75rem .6rem 1rem; } }
+
+/* dark mode: built on #084C61 (surfaces) and #2A9D8F (accent). The login / register pages keep their own light style. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #052f3d; --card: #084c61; --text: #e6f2f1; --muted: #a8c8cc; --line: #1b6b82;
+  --primary: #2a9d8f; --danger: #e5675a; --ok: #5fd08f;
+}
+:root[data-theme='dark'] a { color: #6fd3c5; }
+:root[data-theme='dark'] button { color: #04222b; }
+:root[data-theme='dark'] button.danger { color: #fff; }
+:root[data-theme='dark'] button.secondary, :root[data-theme='dark'] a.btn.secondary { background: #0b6079; color: var(--text); }
+:root[data-theme='dark'] input, :root[data-theme='dark'] textarea, :root[data-theme='dark'] select { background: #05303f; color: var(--text); border-color: var(--line); }
+:root[data-theme='dark'] .session-card { background: #063e50; }
+:root[data-theme='dark'] .badge.open { background: #0f4f3c; color: #9be8bd; }
+:root[data-theme='dark'] .badge.closed { background: #2c4a56; color: #cfe0e5; }
+:root[data-theme='dark'] .badge.warn { background: #4a3b0f; color: #f6d98a; }
+:root[data-theme='dark'] .badge.anon { background: #4a3b0f; color: #f6d98a; }
+:root[data-theme='dark'] .form-error { background: #5a2a2a; color: #ffb3a8; }
+:root[data-theme='dark'] .toast.error { background: #5a2a2a; color: #ffb3a8; }
+:root[data-theme='dark'] .topbar button.secondary { background: transparent; border: 1px solid var(--line); }
+
+/* phones: the links collapse into a dropdown opened by the Menu button */
+.menu-toggle { display: none; }
+@media (max-width: 720px) {
+  .menu-toggle { display: inline-block; order: 1; }
+  .topbar nav { display: none; order: 5; overflow: visible; white-space: normal; }
+  .topbar nav.open { display: flex; flex-direction: column; align-items: stretch; gap: .25rem; flex: 1 0 100%;
+    background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .4rem; }
+  .topbar nav.open > a, .topbar nav.open .menu summary { padding: .65rem .5rem; }
+  .topbar nav.open .menu-items { position: static; box-shadow: none; border: 0; padding: 0 0 0 .75rem; }
+  .topbar .who { order: 2; }
+  .topbar form, .topbar > button { order: 3; }
+}

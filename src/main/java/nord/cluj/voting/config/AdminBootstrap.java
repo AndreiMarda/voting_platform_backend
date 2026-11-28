@@ -3,6 +3,7 @@ package nord.cluj.voting.config;
 import nord.cluj.voting.entity.Role;
 import nord.cluj.voting.entity.User;
 import nord.cluj.voting.repository.UserRepository;
+import nord.cluj.voting.service.PersonNames;
 import nord.cluj.voting.service.Usernames;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,6 +58,9 @@ public class AdminBootstrap implements ApplicationRunner {
         }
         User admin = new User();
         admin.setUsername(name);
+        String[] parts = PersonNames.splitUsername(name);   // the bootstrap admin's name is its username
+        admin.setFirstName(parts[0]);
+        admin.setLastName(parts[1]);
         admin.setPasswordHash(encoder.encode(password));
         admin.setRole(Role.ADMIN); // mustChangePassword stays true
         users.saveAndFlush(admin);

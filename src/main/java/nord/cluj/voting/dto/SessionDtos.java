@@ -15,6 +15,10 @@ public final class SessionDtos {
     public record StartSessionRequest(@NotBlank @Size(max = 100) String name) {
     }
 
+    /** Same rule as starting a session: the name is mandatory. */
+    public record RenameSessionRequest(@NotBlank @Size(max = 100) String name) {
+    }
+
     public record SessionView(Long id, String name, SessionStatus status, String startedBy,
                               Instant startedAt, Instant endedAt, long pollCount) {
     }

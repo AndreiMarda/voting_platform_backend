@@ -19,21 +19,32 @@
 <body>
   <form method="post" action="/login">
     <h1>Voting platform</h1>
-    <div id="error" class="msg error">Invalid username or password.</div>
+    <div id="error" class="msg error">Invalid username/email or password.</div>
     <div id="logout" class="msg info">You have been signed out.</div>
+    <div id="registered" class="msg info">Your account was created. You can sign in now.</div>
+    <div id="full" class="msg error">The platform is full right now (the maximum number of people are online). Please try again in a few minutes.</div>
     <div id="locked" class="msg error"></div>
-    <label>Username
+    <label>Username or email
       <input type="text" name="username" autocomplete="username" required autofocus>
     </label>
     <label>Password
       <input type="password" name="password" autocomplete="current-password" required>
     </label>
     <button type="submit">Sign in</button>
+    <p id="register-box" style="display:none; text-align:center; margin:1rem 0 0; font-size:.9rem">
+      No account yet? <a href="/register.html">Create account</a>
+    </p>
   </form>
   <script>
     const q = new URLSearchParams(location.search);
     if (q.has('error')) document.getElementById('error').style.display = 'block';
     if (q.has('logout')) document.getElementById('logout').style.display = 'block';
+    if (q.has('full')) document.getElementById('full').style.display = 'block';
+    if (q.has('registered')) document.getElementById('registered').style.display = 'block';
+    // "Create account" only appears while an admin has registration open
+    fetch('/api/registration').then((r) => r.json()).then((s) => {
+      if (s.open) document.getElementById('register-box').style.display = 'block';
+    }).catch(() => {});
     if (q.has('locked')) {
       const minutes = Math.max(1, parseInt(q.get('locked'), 10) || 1);
       const box = document.getElementById('locked');

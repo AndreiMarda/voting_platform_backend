@@ -48,14 +48,31 @@ public class UserService {
         if (users.findByUsernameIgnoreCase(username).isPresent()) {   // case-insensitive
             throw usernameTaken();
         }
+        String firstName = PersonNames.normalize(req.firstName());
+        String lastName = PersonNames.normalize(req.lastName());
+        if (!PersonNames.isValid(firstName) || !PersonNames.isValid(lastName)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, PersonNames.RULE);
+        }
+        String email = Profiles.normalizeEmail(req.email());
+        if (!email.isEmpty() && !Profiles.isValidEmail(email)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, Profiles.EMAIL_RULE);
+        }
+        if (!email.isEmpty() && emailTaken(email, null)) {
+            throw emailUsed();
+        }
         User user = new User();
         user.setUsername(username);
+        user.setFirstName(firstName);
+        user.setLastName(lastName);
         user.setPasswordHash(encoder.encode(req.password()));
         user.setRole(req.role());
+        user.setEmail(email.isEmpty() ? null : email);
+        user.setMustAddEmail(email.isEmpty());   // no email given: the user has to add it at first login
         try {
             User saved = users.saveAndFlush(user);
             audit.record(AuditAction.USER_CREATED, "USER", saved.getId(),
-                    "Created " + saved.getRole() + " account \"" + saved.getUsername() + "\"");
+                    "Created " + saved.getRole() + " account \"" + saved.getUsername() + "\" for "
+                            + saved.getDisplayName());
             return UserView.of(saved);
         } catch (DataIntegrityViolationException e) { // lost a race against the unique index
             throw usernameTaken();
@@ -71,7 +88,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<OnlineUserView> listOnline() {
         return users.findByEnabledTrueAndLastSeenAtAfter(Instant.now().minus(onlineWindow)).stream()
-                .sorted(Comparator.comparing(User::getUsername, String.CASE_INSENSITIVE_ORDER))
+                .sorted(Comparator.comparing(User::getDisplayName, String.CASE_INSENSITIVE_ORDER))
                 .map(OnlineUserView::of).toList();
     }
 
@@ -120,6 +137,72 @@ public class UserService {
         user.setPasswordHash(encoder.encode(newPassword));
         user.setMustChangePassword(false);
         audit.record(AuditAction.PASSWORD_CHANGED, "USER", id, "Changed their own password");
+    }
+
+    /** Activates or deactivates an account. A deactivated user cannot sign in and is signed out at once. */
+    @Transactional
+    public UserView setEnabled(Long id, boolean enabled, Long requesterId) {
+        if (id.equals(requesterId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "You cannot change the status of your own account");
+        }
+        User user = find(id);
+        if (user.isEnabled() != enabled) {
+            user.setEnabled(enabled);
+            if (!enabled) {
+                user.setLastSeenAt(null);   // stop showing them as online
+            }
+            audit.record(enabled ? AuditAction.USER_ACTIVATED : AuditAction.USER_DEACTIVATED, "USER", id,
+                    (enabled ? "Activated" : "Deactivated") + " account \"" + user.getUsername() + "\"");
+        }
+        return UserView.of(user);
+    }
+
+    /**
+     * The user's own details. The email is required (and clears the "must add email" flag). The ID ONCR is
+     * optional: empty leaves it as it is. It is unique and without it the user cannot vote.
+     */
+    @Transactional
+    public UserView updateProfile(Long id, String rawEmail, String rawIdOncr) {
+        User user = find(id);
+        String email = Profiles.normalizeEmail(rawEmail);
+        if (!Profiles.isValidEmail(email)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, Profiles.EMAIL_RULE);
+        }
+        if (emailTaken(email, id)) {
+            throw emailUsed();
+        }
+        String idOncr = Profiles.normalizeId(rawIdOncr);
+        if (!idOncr.isEmpty()) {
+            if (!Profiles.isValidId(idOncr)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, Profiles.ID_RULE);
+            }
+            if (users.findByIdOncr(idOncr).filter(other -> !other.getId().equals(id)).isPresent()) {
+                throw idTaken();
+            }
+            user.setIdOncr(idOncr);
+        }
+        user.setEmail(email);
+        user.setMustAddEmail(false);
+        try {
+            users.saveAndFlush(user);
+        } catch (DataIntegrityViolationException e) {   // lost a race against the unique index
+            throw idTaken();
+        }
+        audit.record(AuditAction.PROFILE_UPDATED, "USER", id, "Updated their email / ID ONCR");
+        return UserView.of(user);
+    }
+
+    /** True if another account (not {@code exceptId}) already uses this email: it is what people can sign in with. */
+    private boolean emailTaken(String email, Long exceptId) {
+        return users.findByEmailIgnoreCase(email).stream().anyMatch(u -> !u.getId().equals(exceptId));
+    }
+
+    private static ResponseStatusException emailUsed() {
+        return new ResponseStatusException(HttpStatus.CONFLICT, "This email address is already used by another account");
+    }
+
+    private static ResponseStatusException idTaken() {
+        return new ResponseStatusException(HttpStatus.CONFLICT, "This ID ONCR is already used by another account");
     }
 
     private User find(Long id) {

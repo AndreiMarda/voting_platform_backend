@@ -9,6 +9,8 @@ otherwise the cookie will not be sent.
 - `401` – not signed in (or the account was deleted/disabled). Go to the login page.
 - `403` with `{"error":"PASSWORD_CHANGE_REQUIRED"}` – the user must change their password first;
   only `/api/auth/me`, `/api/auth/change-password` and `/logout` work until they do.
+A user created without an email gets `403 {"error":"EMAIL_REQUIRED"}` (pages redirect to `/profile.html`) on everything
+except `/api/auth/me`, `/api/auth/profile` and `/logout` until they add it (after the password change).
 - `403` – not allowed (e.g. a normal user calling an admin endpoint).
 - Any other 4xx – `{"detail": "<human readable reason>"}`, suitable for a toast.
   Validation failures are `400`; "already voted", "poll closed", "username taken", … are `409`.
@@ -18,7 +20,8 @@ otherwise the cookie will not be sent.
 |---|---|---|
 | `POST /login` (form: `username`, `password`) | anyone | The username is trimmed and matched case-insensitively with single spaces, so `"  ion   popescu "` finds `Ion Popescu`. Success → redirect to `/`; failure → redirect to `/login.html?error` |
 | `POST /logout` | signed in | Redirects to `/login.html?logout` |
-| `GET /api/auth/me` | signed in | `{id, username, role: "ADMIN"\|"USER", mustChangePassword}` |
+| `GET /api/auth/me` | signed in | `{id, username, firstName, lastName, displayName, role: "ADMIN"\|"USER", mustChangePassword, email, idOncr, mustAddEmail}` |
+| `PUT /api/auth/profile` | signed in | `{email (required), idOncr (optional)}` → `MeView`. The ID ONCR is two capital letters + 1–5 digits (≤7 chars, lower case is upper-cased) and unique (`409` if taken, `400` if malformed); empty leaves the current one. Without an ID ONCR a user is not eligible and cannot vote (`403`). Clears `mustAddEmail`; if the user is added to votes that are already open |
 | `POST /api/auth/change-password` | signed in | `{currentPassword, newPassword}` (8–72 chars, must differ from current and from the default password) → `204` |
 | `POST /api/heartbeat` | signed in | → `204`. Call every ~30 s; "online" users (seen in the last 2 min) become the voters of a newly launched poll |
 
@@ -40,7 +43,7 @@ Limits: `voting.login.*` in `application.yaml`.
 ## Audit log (admin only)
 `AuditView = {id, occurredAt, actorName, action, targetType, targetId, details, ip}`. `actorName` is the logged-in
 user, or the typed name for failed logins. Actions: `LOGIN_SUCCESS`, `LOGIN_FAILED`, `LOGIN_LOCKED`, `LOGOUT`,
-`USER_CREATED`, `USER_DELETED`, `PASSWORD_RESET`, `PASSWORD_CHANGED`, `SESSION_STARTED`, `SESSION_ENDED`,
+`USER_CREATED`, `USER_DELETED`, `PASSWORD_RESET`, `PASSWORD_CHANGED`, `SESSION_STARTED`, `SESSION_ENDED`, `SESSION_RENAMED`, `USER_ACTIVATED`, `USER_DEACTIVATED`, `PROFILE_UPDATED`,
 `POLL_CREATED`, `POLL_CLOSED`, `POLL_DELETED`. **Casting a vote is never logged** (it would reveal voters of anonymous
 votes). Read-only: there is no endpoint to edit or delete entries.
 
@@ -80,15 +83,42 @@ session. Ending a session closes its open votes. Everything stays stored as hist
 | `GET /api/sessions` | signed in | All sessions, newest first |
 | `GET /api/sessions/{id}` | signed in | One session (`404` if unknown) |
 | `GET /api/sessions/{id}/export.csv` | signed in | CSV download (UTF-8 with BOM, one row per vote: type, status, dates, eligible, voted, For/Against/Abstain). Open votes have blank totals; no names ever. Formula-looking cells are prefixed with `'` |
+| `PATCH /api/sessions/{id}` | admin | `{name (required, ≤100)}` → `SessionView`. Renames a running **or** ended session; audited as `SESSION_RENAMED`. `400` if blank, `404` if unknown |
 | `POST /api/sessions/{id}/end` | admin | → `SessionView`. Closes the session's open votes. `409` if already ended |
 
 ## Users (admin only)
-`UserView = {id, username, role, enabled, mustChangePassword, createdAt}` (never a password hash)
+Users sign in with their `username` but are shown everywhere as `displayName` = `"firstName lastName"` (falls back to the
+username if the names are empty). Participation lists, online users, "started by" and the top bar use the display name; the
+audit log keeps the username.
+
+`UserView = {id, username, firstName, lastName, displayName, role, enabled, mustChangePassword, createdAt, email, idOncr, mustAddEmail, lastLoginAt}`
+(never a password hash). `email`, `idOncr` and `lastLoginAt` are `null` until set / first login (accounts that existed
+before these fields show a dash).
 
 | Call | Notes |
 |---|---|
 | `GET /api/users` | List |
 | `GET /api/users/online` | Users logged in right now (heartbeat within the last 2 min, enabled), A–Z: `[{id, username, role, lastSeenAt}]`. Logging out removes a user immediately |
-| `POST /api/users` | `{username, password (8–72), role}` → `201`. The username is a person's name: one or two first names + a last name (2–3 words, letters only, ≤60 chars). It is normalised first (trimmed, single spaces, every word capitalised: `"  ion  POPESCU "` → `Ion Popescu`); `400` if it breaks the rule, `409` if taken (case-insensitive). The user must change the password at first login |
+| `POST /api/users` | `{username, firstName, lastName, password (8–72), role, email (optional)}` → `201`. First and last name are required: letters, spaces, hyphens or apostrophes, ≤60 chars each, normalised (trimmed, each word capitalised); `400` otherwise. Without an email the user must add one at first login (`mustAddEmail`). The username is a person's name: one or two first names + a last name (2–3 words, letters only, ≤60 chars). It is normalised first (trimmed, single spaces, every word capitalised: `"  ion  POPESCU "` → `Ion Popescu`); `400` if it breaks the rule, `409` if taken (case-insensitive). The user must change the password at first login |
+| `PATCH /api/users/{id}/status` | `{enabled: true\|false}` → `UserView`. Deactivated users are signed out at once and cannot sign in. `409` if it is yourself, `404` if unknown |
 | `POST /api/users/{id}/reset-password` | Sets the default password (`voting.default-password`) and forces a change → `204` |
 | `DELETE /api/users/{id}` | → `204`. `409` if it is yourself or the user is part of any poll |
+
+## Audit log search, registration and date format
+- `GET /api/audit` also takes optional filters (combined with AND): `from` (inclusive) and `to` (exclusive), both ISO
+  instants (the pages send the start of the chosen days in the admin's time zone); `user` (part of a username, first or
+  last name, any case); `action` (an audit action, `400` if unknown). Paging with `beforeId` works with filters.
+  The audit pages offer "Export PDF": every matching entry (newest 5000 at most) as a print view / "Save as PDF".
+- Self-registration, closed by default:
+  - `GET /api/registration` (public) → `{open}`. The login page shows "Create account" only when `open`.
+  - `PUT /api/registration` (admin) `{open}` → `{open}`; audited as `REGISTRATION_OPENED` / `REGISTRATION_CLOSED`.
+  - `POST /api/register` (public, only while open, else `403`) `{username, firstName, lastName, password (8–72), email, idOncr?}`
+    → `201 {username, displayName}`. Same rules as admin-created accounts; the account is a regular, active `USER` who
+    chose their own password (no forced change), audited as `USER_REGISTERED`. `409` if the username or ID ONCR is taken.
+- Dates are shown as `DD.MM.YYYY` and times as `HH:mm` (also in the CSV export); the API itself still sends ISO instants.
+
+## Online limit
+At most `voting.max-online` people (env `MAX_ONLINE`, default 60) can be online at once; "online" means active within the
+online window (login or heartbeat), as on the Online users page. Administrators are always let in (and still counted).
+When it is full, a login is refused (redirect to `/login.html?full=1`) and a user who had gone idle and comes back gets
+`503 {"error":"PLATFORM_FULL"}` until someone leaves; people already online keep working. Logging out frees a place at once.

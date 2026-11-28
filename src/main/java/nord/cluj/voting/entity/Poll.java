@@ -49,6 +49,13 @@ public class Poll {
     @Column(name = "closed_at")
     private Instant closedAt;
 
+    /** SHA-256 fingerprint of the ballots, made when the poll closed (null while open). See PollIntegrityService. */
+    @Column(length = 64)
+    private String seal;
+
+    @Column(name = "sealed_ballots")
+    private Integer sealedBallots;
+
     /** Closes the poll; satisfies the DB check that CLOSED requires closed_at. */
     public void close() {
         this.status = PollStatus.CLOSED;
@@ -68,6 +75,13 @@ public class Poll {
 
     public boolean isAnonymous() { return anonymous; }
     public void setAnonymous(boolean anonymous) { this.anonymous = anonymous; }
+
+    public String getSeal() { return seal; }
+    public Integer getSealedBallots() { return sealedBallots; }
+    public void setSeal(String seal, int sealedBallots) {
+        this.seal = seal;
+        this.sealedBallots = sealedBallots;
+    }
 
     public PollStatus getStatus() { return status; }
 

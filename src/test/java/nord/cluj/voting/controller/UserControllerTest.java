@@ -58,6 +58,7 @@ class UserControllerTest {
         u.setUsername(username);
         u.setPasswordHash(encoder.encode("password-123"));
         u.setRole(role);
+        u.setIdOncr(TestSupport.idOncr());
         u.setMustChangePassword(false);
         return users.saveAndFlush(u);
     }
@@ -68,7 +69,8 @@ class UserControllerTest {
     }
 
     private static String body(String username, String password, String role) {
-        return "{\"username\":\"%s\",\"password\":\"%s\",\"role\":\"%s\"}".formatted(username, password, role);
+        return "{\"username\":\"%s\",\"firstName\":\"Test\",\"lastName\":\"Person\",\"password\":\"%s\",\"role\":\"%s\"}"
+                .formatted(username, password, role);
     }
 
     @BeforeEach

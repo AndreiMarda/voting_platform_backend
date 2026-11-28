@@ -17,6 +17,8 @@ public interface BallotRepository extends JpaRepository<Ballot, UUID> {
         long getTotal();
     }
 
+    List<Ballot> findByPollId(Long pollId);
+
     @Modifying
     @Query("delete from Ballot b where b.pollId = :pollId")
     void deleteByPollId(@Param("pollId") Long pollId);

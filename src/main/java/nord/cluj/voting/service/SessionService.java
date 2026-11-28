@@ -28,9 +28,11 @@ public class SessionService {
 
     private final AuditService audit;
     private final EventBroadcaster events;
+    private final PollIntegrityService integrity;
 
     public SessionService(SessionRepository sessions, PollRepository polls, UserRepository users, AuditService audit,
-                          EventBroadcaster events) {
+                          EventBroadcaster events, PollIntegrityService integrity) {
+        this.integrity = integrity;
         this.events = events;
         this.audit = audit;
         this.sessions = sessions;
@@ -69,8 +71,14 @@ public class SessionService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "This session has already ended");
         }
         int closed = 0;
-        for (Poll poll : polls.findBySessionIdAndStatus(id, PollStatus.OPEN)) {
+        for (Poll open : polls.findBySessionIdAndStatus(id, PollStatus.OPEN)) {
+            // lock the poll first: a vote being cast right now finishes before the poll is closed and sealed
+            Poll poll = polls.findByIdForUpdate(open.getId()).orElse(null);
+            if (poll == null || poll.getStatus() != PollStatus.OPEN) {
+                continue;
+            }
             poll.close();
+            integrity.seal(poll);
             closed++;
         }
         session.end();
@@ -79,6 +87,25 @@ public class SessionService {
                 "Ended session \"" + session.getName() + "\" (" + closed + " open vote" + (closed == 1 ? "" : "s") + " closed)");
         events.publish("session");
         events.publish("polls");         // its open votes were closed
+        return view(session);
+    }
+
+    /** Renames a session, running or ended. The change is recorded in the audit log. */
+    @Transactional
+    public SessionView rename(Long id, String rawName) {
+        String name = rawName == null ? "" : rawName.trim().replaceAll("\\s+", " ");
+        if (name.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A session needs a name");
+        }
+        VotingSession session = sessions.findByIdForUpdate(id).orElseThrow(SessionService::notFound);
+        String oldName = session.getName();
+        if (!oldName.equals(name)) {
+            session.setName(name);
+            sessions.flush();
+            audit.record(AuditAction.SESSION_RENAMED, "SESSION", id,
+                    "Renamed session \"" + oldName + "\" to \"" + name + "\"");
+            events.publish("session");
+        }
         return view(session);
     }
 
@@ -100,7 +127,7 @@ public class SessionService {
     }
 
     private SessionView view(VotingSession s) {
-        return new SessionView(s.getId(), s.getName(), s.getStatus(), s.getStartedBy().getUsername(),
+        return new SessionView(s.getId(), s.getName(), s.getStatus(), s.getStartedBy().getDisplayName(),
                 s.getStartedAt(), s.getEndedAt(), polls.countBySessionId(s.getId()));
     }
 

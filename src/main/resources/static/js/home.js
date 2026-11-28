@@ -12,7 +12,7 @@ const resultsCache = new Map();     // closed polls never change, so fetch their
 let startDialog, live;
 const pollDialogs = {};             // keyed by "anonymous" (true/false)
 
-const when = (iso) => new Date(iso).toLocaleString();
+const when = (iso) => fmtDateTime(iso);
 const isAdmin = () => me.role === 'ADMIN';
 
 /* ---------- loading and rendering ---------- */
@@ -47,9 +47,12 @@ function renderHead() {
         el('span', { class: 'badge ' + (active ? 'open' : 'closed') }, active ? 'Active session' : 'Ended session'),
         el('button', { class: 'secondary small', onclick: () => openLive(null) }, 'Who voted (live)'),
         el('a', { class: 'btn secondary small', href: '/report.html?session=' + session.id }, 'Report / PDF'),
+        el('a', { class: 'btn secondary small', href: '/api/sessions/' + session.id + '/report.pdf' }, 'Download PDF'),
         el('a', { class: 'btn secondary small', href: '/api/sessions/' + session.id + '/export.csv' }, 'Export CSV'),
         isAdmin() && active ? el('button', { class: 'small', onclick: () => openPollDialog(false) }, 'Create new vote') : null,
         isAdmin() && active ? el('button', { class: 'small', onclick: () => openPollDialog(true) }, 'Create anonymous vote') : null,
+        isAdmin() ? el('button', { class: 'secondary small',
+          onclick: () => openRenameSessionDialog(session, () => load().catch(() => {})) }, 'Rename') : null,
         isAdmin() && active ? el('button', { class: 'secondary small', onclick: endSession }, 'End session') : null)),
     el('div', { class: 'meta' },
       'Started by ' + session.startedBy + ' on ' + when(session.startedAt)
@@ -88,6 +91,8 @@ function pollCard(p) {
     card.append(results);
     loadResults(p.id, results);
   }
+  // date and time at the very bottom of the card
+  card.append(el('div', { class: 'meta poll-time' }, 'Created ' + when(p.createdAt)));
   return card;
 }
 
@@ -101,6 +106,10 @@ function myPart(p) {
       : el('div', { class: 'note' }, 'You voted. This vote is anonymous, so your choice is not stored with your name.');
   }
   if (p.status === 'CLOSED') return el('div', { class: 'note' }, 'You did not vote in this poll.');
+  if (!me.idOncr) {
+    return el('div', { class: 'note' }, 'You cannot vote until you add your ID ONCR. ',
+      el('a', { href: '/profile.html' }, 'Add it in your profile'), '.');
+  }
   if (!p.eligible) return el('div', { class: 'note' }, 'You cannot vote in this vote right now. If you just signed in, wait a moment.');
 
   return el('div', { class: 'choices' },
@@ -282,7 +291,7 @@ function buildLive() {
           el('div', {}, 'have voted'),
           el('div', { class: 'meta' }, 'This vote is anonymous: names are not shown.'));
         note.textContent = '';
-        status.textContent = 'Updated ' + new Date().toLocaleTimeString() + (open ? '' : ' · this vote is closed');
+        status.textContent = 'Updated ' + fmtTime(new Date()) + (open ? '' : ' · this vote is closed');
         return;
       }
       grid.hidden = false;
@@ -294,7 +303,7 @@ function buildLive() {
       note.textContent = open && part.notVotedOffline > 0
         ? part.notVotedOffline + (part.notVotedOffline === 1 ? ' eligible user is' : ' eligible users are')
           + ' offline and not shown.' : '';
-      status.textContent = 'Updated ' + new Date().toLocaleTimeString() + (open ? '' : ' · this vote is closed');
+      status.textContent = 'Updated ' + fmtTime(new Date()) + (open ? '' : ' · this vote is closed');
     } catch (e) { status.textContent = e.message; }
   }
 

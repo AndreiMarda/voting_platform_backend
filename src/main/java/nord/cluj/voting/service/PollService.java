@@ -11,7 +11,9 @@ import nord.cluj.voting.entity.PollEligibleVoter;
 import nord.cluj.voting.entity.PollStatus;
 import nord.cluj.voting.entity.Role;
 import nord.cluj.voting.entity.User;
+import nord.cluj.voting.entity.DeletedPoll;
 import nord.cluj.voting.repository.BallotRepository;
+import nord.cluj.voting.repository.DeletedPollRepository;
 import nord.cluj.voting.repository.PollEligibleVoterRepository;
 import nord.cluj.voting.repository.PollParticipationRepository;
 import nord.cluj.voting.repository.PollRepository;
@@ -46,6 +48,8 @@ public class PollService {
     private final Duration onlineWindow;
     private final AuditService audit;
     private final EventBroadcaster events;
+    private final PollIntegrityService integrity;
+    private final DeletedPollRepository deletedPolls;
 
     public PollService(PollRepository polls,
                        PollEligibleVoterRepository eligibleVoters,
@@ -55,7 +59,11 @@ public class PollService {
                        SessionRepository sessions,
                        AuditService audit,
                        EventBroadcaster events,
+                       PollIntegrityService integrity,
+                       DeletedPollRepository deletedPolls,
                        @Value("${voting.online-window:PT2M}") Duration onlineWindow) {
+        this.integrity = integrity;
+        this.deletedPolls = deletedPolls;
         this.events = events;
         this.audit = audit;
         this.sessions = sessions;
@@ -97,7 +105,7 @@ public class PollService {
         // Administrators run the votes but never take part in them, so only online regular users are eligible.
         Set<Long> voterIds = new LinkedHashSet<>();
         users.findByEnabledTrueAndLastSeenAtAfter(Instant.now().minus(onlineWindow)).stream()
-                .filter(u -> u.getRole() == Role.USER)
+                .filter(u -> u.getRole() == Role.USER && u.getIdOncr() != null)   // no ID ONCR, no vote
                 .forEach(u -> voterIds.add(u.getId()));
         eligibleVoters.saveAll(voterIds.stream().map(id -> new PollEligibleVoter(poll.getId(), id)).toList());
 
@@ -117,7 +125,7 @@ public class PollService {
     @Transactional
     public int enrollInOpenPolls(Long userId) {
         User user = users.findById(userId).orElse(null);
-        if (user == null || user.getRole() != Role.USER || !user.isEnabled()) {
+        if (user == null || user.getRole() != Role.USER || !user.isEnabled() || user.getIdOncr() == null) {
             return 0;
         }
         int joined = eligibleVoters.enrollInOpenPolls(userId);
@@ -135,6 +143,10 @@ public class PollService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Unknown user"));
         if (voter.getRole() == Role.ADMIN) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Administrators cannot vote");
+        }
+        if (voter.getIdOncr() == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Add your ID ONCR to your profile before you can vote");
         }
         if (poll.getStatus() != PollStatus.OPEN) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "This poll is closed");
@@ -159,6 +171,7 @@ public class PollService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "This poll is already closed");
         }
         poll.close();
+        integrity.seal(poll);   // fingerprint of the ballots; the poll row is locked, so no vote can slip in
         audit.record(AuditAction.POLL_CLOSED, "POLL", pollId, "Closed vote \"" + poll.getTitle() + "\"");
         events.publish("polls");
         return view(poll, requesterId);
@@ -178,6 +191,13 @@ public class PollService {
         audit.record(AuditAction.POLL_DELETED, "POLL", pollId,
                 "Deleted " + (poll.isAnonymous() ? "anonymous " : "") + poll.getStatus().name().toLowerCase()
                         + " vote \"" + poll.getTitle() + "\" (" + voted + " of " + eligible + " had voted)");
+        // keep a short record (counts only, no names) so the session's PDF report can still list this vote;
+        // totals only if it was closed, exactly like the live results
+        Map<Choice, Long> tally = poll.getStatus() == PollStatus.CLOSED ? results(pollId).tally() : null;
+        deletedPolls.save(new DeletedPoll(poll, eligible, voted,
+                tally == null ? null : tally.get(Choice.FOR),
+                tally == null ? null : tally.get(Choice.AGAINST),
+                tally == null ? null : tally.get(Choice.ABSTAIN)));
         ballots.deleteByPollId(pollId);          // children first: they reference the poll
         participation.deleteByPollId(pollId);
         eligibleVoters.deleteByPollId(pollId);   // participation references this one, so it goes after it
@@ -221,7 +241,7 @@ public class PollService {
         boolean open = poll.getStatus() == PollStatus.OPEN;
 
         List<String> voted = eligibleIds.stream().filter(votedIds::contains)
-                .map(id -> people.get(id).getUsername()).sorted().toList();
+                .map(id -> people.get(id).getDisplayName()).sorted(String.CASE_INSENSITIVE_ORDER).toList();
         List<String> notVoted = new java.util.ArrayList<>();
         int offline = 0;
         for (Long id : eligibleIds) {
@@ -231,7 +251,7 @@ public class PollService {
             }
             boolean online = u.isEnabled() && u.getLastSeenAt() != null && u.getLastSeenAt().isAfter(onlineSince);
             if (!open || online) {
-                notVoted.add(u.getUsername());
+                notVoted.add(u.getDisplayName());
             } else {
                 offline++;
             }

@@ -34,6 +34,7 @@ class PollServiceTest {
         u.setUsername("t" + UUID.randomUUID().toString().substring(0, 8));
         u.setPasswordHash("x");
         u.setRole(role);
+        u.setIdOncr(TestSupport.idOncr());
         if (online) u.setLastSeenAt(Instant.now());
         return users.saveAndFlush(u);
     }
